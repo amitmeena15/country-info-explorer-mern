@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 import {
   Globe2,
   Search,
@@ -136,8 +136,15 @@ export default function App() {
         );
       })
       .filter((country) => {
-        const population = Number(country.population);
+        // No population filter: include countries even if data is missing.
+        if (populationFilter === 'all') return true;
 
+        // Missing values must not be treated as zero.
+        if (country.population == null || country.population === '') {
+          return false;
+        }
+
+        const population = Number(country.population);
         return (
           Number.isFinite(population) &&
           population >= selectedRange.min &&
@@ -161,7 +168,7 @@ export default function App() {
             Number(a.area || 0);
         }
 
-        return a.name.localeCompare(b.name);
+        return String(a.name ?? '').localeCompare(String(b.name ?? ''));
       });
   }, [
     countries,
@@ -181,8 +188,7 @@ export default function App() {
         : [...current, code]
     );
   }
-
-  function resetFilters() {
+   function resetFilters() {
     setQuery('');
     setSearchType('all');
     setRegion('All regions');
@@ -368,11 +374,13 @@ export default function App() {
             </span>
 
             <select
-              value={populationFilter}
-              onChange={(event) =>
-                setPopulationFilter(event.target.value)
-              }
-            >
+  
+  value={populationFilter}
+  onChange={(event) =>
+    setPopulationFilter(event.target.value)
+  }
+>
+                
               {Object.entries(populationRanges).map(
                 ([value, range]) => (
                   <option key={value} value={value}>
@@ -531,7 +539,7 @@ export default function App() {
                         className={`favorite-button ${
                           isFavorite ? 'selected' : ''
                         }`}
-                        onClick={() =>
+                                onClick={() =>
                           toggleFavorite(country.code)
                         }
                         aria-label={`${

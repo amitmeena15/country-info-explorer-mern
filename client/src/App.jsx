@@ -32,17 +32,9 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const [favorites, setFavorites] = useState(() => {
-    try {
-      const saved = JSON.parse(
-        localStorage.getItem('world-explorer-favorites') || '[]'
-      );
-      return Array.isArray(saved) ? saved : [];
-    } catch {
-      return [];
-    }
-  });
-
+  const [favorites, setFavorites] = useState([]);
+const [favoritesLoading, setFavoritesLoading] = useState(true);
+const [favoritesError, setFavoritesError] = useState('');
   const [showFavorites, setShowFavorites] = useState(false);
   const [dark, setDark] = useState(true);
 
@@ -77,16 +69,31 @@ export default function App() {
     loadCountries();
   }, []);
 
-  useEffect(() => {
+useEffect(() => {
+  async function loadFavorites() {
     try {
-      localStorage.setItem(
-        'world-explorer-favorites',
-        JSON.stringify(favorites)
+      const response = await fetch('/api/favorites');
+
+      if (!response.ok) {
+        throw new Error('Unable to load favorites');
+      }
+
+      const data = await response.json();
+
+      setFavorites(
+        Array.isArray(data.favorites)
+          ? data.favorites.map((favorite) => favorite.countryCode)
+          : []
       );
-    } catch {
-      // App remains usable if browser storage is unavailable.
+    } catch (error) {
+      setFavoritesError(error.message);
+    } finally {
+      setFavoritesLoading(false);
     }
-  }, [favorites]);
+  }
+
+  loadFavorites();
+}, []);
 
   const regions = useMemo(() => {
     return [
@@ -181,13 +188,47 @@ export default function App() {
     favorites
   ]);
 
-  function toggleFavorite(code) {
+  async function toggleFavorite(country) {
+  const code = country.code;
+  const isFavorite = favorites.includes(code);
+
+  setFavoritesError('');
+
+  try {
+    const response = await fetch(
+      isFavorite
+        ? `/api/favorites/${encodeURIComponent(code)}`
+        : '/api/favorites',
+      {
+        method: isFavorite ? 'DELETE' : 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        ...(!isFavorite && {
+          body: JSON.stringify({
+            countryCode: code,
+            countryName: country.name,
+            flag: country.flag || '',
+            region: country.region || '',
+            capital: country.capital || ''
+          })
+        })
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error('Unable to update favorites');
+    }
+
     setFavorites((current) =>
-      current.includes(code)
+      isFavorite
         ? current.filter((item) => item !== code)
         : [...current, code]
     );
+  } catch (error) {
+    setFavoritesError(error.message);
   }
+}
    function resetFilters() {
     setQuery('');
     setSearchType('all');
@@ -540,7 +581,7 @@ export default function App() {
                           isFavorite ? 'selected' : ''
                         }`}
                                 onClick={() =>
-                          toggleFavorite(country.code)
+                          toggleFavorite(country)
                         }
                         aria-label={`${
                           isFavorite ? 'Remove' : 'Add'

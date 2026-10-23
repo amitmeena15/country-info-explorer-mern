@@ -15,6 +15,11 @@ dns.setServers(['8.8.8.8']);
 
 // Create Express App
 const app = express();
+// Trust the HTTPS reverse proxy in production.
+// Enable this only when deployed behind a trusted single proxy.
+if (process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1);
+}
 
 // Server Port
 const port = Number(process.env.PORT) || 5000;
@@ -46,6 +51,7 @@ if (!process.env.SESSION_SECRET || !process.env.MONGODB_URI) {
 }
 
 app.use(
+  '/api/favorites',
   session({
     name: 'world_explorer.sid',
     secret: process.env.SESSION_SECRET,

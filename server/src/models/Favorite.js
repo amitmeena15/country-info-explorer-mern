@@ -4,36 +4,40 @@ const favoriteSchema = new mongoose.Schema(
   {
     ownerId: {
       type: String,
-      required: true,
-      index: true
+      required: true
     },
 
     countryCode: {
       type: String,
       required: true,
       uppercase: true,
-      trim: true
+      trim: true,
+      match: /^[A-Z]{2,3}$/
     },
 
     countryName: {
       type: String,
       required: true,
-      trim: true
+      trim: true,
+      maxlength: 120
     },
 
     flag: {
       type: String,
-      default: ''
+      default: '',
+      maxlength: 20
     },
 
     region: {
       type: String,
-      default: ''
+      default: '',
+      maxlength: 100
     },
 
     capital: {
       type: String,
-      default: ''
+      default: '',
+      maxlength: 120
     }
   },
   {
@@ -46,6 +50,13 @@ favoriteSchema.index(
   { ownerId: 1, countryCode: 1 },
   { unique: true }
 );
+// Hide internal visitor identifier from API responses.
+favoriteSchema.set('toJSON', {
+  transform: (_doc, ret) => {
+    delete ret.ownerId;
+    return ret;
+  }
+});
 
 const Favorite = mongoose.model('Favorite', favoriteSchema);
 

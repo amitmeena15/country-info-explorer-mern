@@ -62,7 +62,7 @@ router.post('/', async (req, res) => {
       });
     }
       const optionalFields = [
-  ['flag', flag, 500],
+  ['flag', flag, 20],
   ['region', region, 100],
   ['capital', capital, 120]
 ];

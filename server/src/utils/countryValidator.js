@@ -2,12 +2,14 @@ const COUNTRIES_API =
   'https://raw.githubusercontent.com/mariuspatru/restcountries/main/all-countries-v3.1.json';
 
 const CACHE_DURATION = 5 * 60 * 1000;
+const STALE_RETRY_DURATION = 30 * 1000;
 
-let cachedCodes = null;
+let cachedCountries = null;
 let cacheExpiresAt = 0;
 let pendingRequest = null;
 
-async function loadCountryCodes() {
+// Fetch and cache canonical country information
+async function loadCountries() {
   const response = await fetch(COUNTRIES_API, {
     headers: {
       Accept: 'application/json'
@@ -16,7 +18,7 @@ async function loadCountryCodes() {
   });
 
   if (!response.ok) {
-    throw new Error('Unable to fetch country codes');
+    throw new Error('Unable to fetch country data');
   }
 
   const countries = await response.json();
@@ -25,38 +27,94 @@ async function loadCountryCodes() {
     throw new Error('Invalid country dataset');
   }
 
-  const codes = new Set(
-    countries
-      .map((country) => country?.cca3)
-      .filter((code) => /^[A-Z]{3}$/.test(code))
-  );
+  const countryMap = new Map();
 
-  if (codes.size === 0) {
+  for (const country of countries) {
+    const code = country?.cca3;
+    const name = country?.name?.common;
+
+    if (
+      !/^[A-Z]{3}$/.test(code || '') ||
+      typeof name !== 'string' ||
+      !name.trim()
+    ) {
+      continue;
+    }
+
+    const record = {
+      countryCode: code,
+      countryName: name.trim(),
+      flag: country.flags?.svg || country.flags?.png || '',
+      region: country.region || 'Other',
+      capital: Array.isArray(country.capital)
+        ? country.capital[0] || 'No capital listed'
+        : 'No capital listed'
+    };
+
+    // Keep canonical records within database field limits
+    if (
+      record.countryName.length > 120 ||
+      typeof record.flag !== 'string' ||
+      record.flag.length > 500 ||
+      typeof record.region !== 'string' ||
+      record.region.length > 100 ||
+      typeof record.capital !== 'string' ||
+      record.capital.length > 120
+    ) {
+      continue;
+    }
+
+    countryMap.set(code, record);
+  }
+
+  if (countryMap.size === 0) {
     throw new Error('Country dataset is empty');
   }
 
-  cachedCodes = codes;
+  cachedCountries = countryMap;
   cacheExpiresAt = Date.now() + CACHE_DURATION;
 
-  return codes;
+  return countryMap;
 }
 
-export async function isValidCountryCode(countryCode) {
-  if (!/^[A-Z]{3}$/.test(countryCode)) {
-    return false;
+// Return verified country information
+export async function getValidCountry(countryCode) {
+  if (
+    typeof countryCode !== 'string' ||
+    !/^[A-Z]{3}$/.test(countryCode)
+  ) {
+    return null;
   }
 
-  if (cachedCodes && Date.now() < cacheExpiresAt) {
-    return cachedCodes.has(countryCode);
+  if (
+    cachedCountries &&
+    Date.now() < cacheExpiresAt
+  ) {
+    return cachedCountries.get(countryCode) || null;
   }
 
   if (!pendingRequest) {
-    pendingRequest = loadCountryCodes().finally(() => {
+    pendingRequest = loadCountries().finally(() => {
       pendingRequest = null;
     });
   }
 
-  const codes = await pendingRequest;
+  // Use stale country data when refresh fails
+  const countries = await pendingRequest.catch((error) => {
+    if (!cachedCountries) {
+      throw error;
+    }
 
-  return codes.has(countryCode);
+    cacheExpiresAt = Date.now() + STALE_RETRY_DURATION;
+
+    return cachedCountries;
+  });
+
+  return countries.get(countryCode) || null;
+}
+
+// Preserve compatibility with existing validation calls
+export async function isValidCountryCode(countryCode) {
+  const country = await getValidCountry(countryCode);
+  return country !== null;
 }

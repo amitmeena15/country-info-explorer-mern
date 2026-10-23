@@ -1,6 +1,6 @@
 import express from 'express';
 import Favorite from '../models/Favorite.js';
-import { isValidCountryCode } from '../utils/countryValidator.js';
+import { getValidCountry } from '../utils/countryValidator.js';
 
 const router = express.Router();
 
@@ -104,11 +104,11 @@ router.post('/', async (req, res) => {
       });
     }
 
-    // Verify country code against the real country dataset
-    let validCountryCode;
+    // Get verified country information from the dataset
+    let verifiedCountry;
 
     try {
-      validCountryCode = await isValidCountryCode(normalizedCode);
+      verifiedCountry = await getValidCountry(normalizedCode);
     } catch (validationError) {
       console.error(
         'Country validation unavailable:',
@@ -121,7 +121,7 @@ router.post('/', async (req, res) => {
       });
     }
 
-    if (!validCountryCode) {
+    if (!verifiedCountry) {
       return res.status(400).json({
         success: false,
         message: 'Invalid country code'
@@ -142,14 +142,10 @@ router.post('/', async (req, res) => {
       });
     }
 
-    // Save new favorite
+    // Save only verified country information
     const favorite = await Favorite.create({
       ownerId: req.sessionID,
-      countryCode: normalizedCode,
-      countryName: countryName.trim(),
-      flag: typeof flag === 'string' ? flag : '',
-      region: typeof region === 'string' ? region : '',
-      capital: typeof capital === 'string' ? capital : ''
+      ...verifiedCountry
     });
 
     return res.status(201).json({

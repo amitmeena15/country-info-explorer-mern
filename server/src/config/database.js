@@ -24,5 +24,18 @@ export async function connectDatabase(uri) {
     console.log('Removed legacy countryCode_1 unique index');
   }
 
+  // Remove the redundant ownerId index if it exists.
+  const redundantOwnerIndex = indexes.find(
+    (index) =>
+      index.name === 'ownerId_1' &&
+      index.key?.ownerId === 1 &&
+      Object.keys(index.key).length === 1
+  );
+
+  if (redundantOwnerIndex) {
+    await Favorite.collection.dropIndex('ownerId_1');
+    console.log('Removed redundant ownerId_1 index');
+  }
+
   console.log('Favorite indexes verified');
 }

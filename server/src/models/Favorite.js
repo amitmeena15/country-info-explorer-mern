@@ -25,7 +25,7 @@ const favoriteSchema = new mongoose.Schema(
     flag: {
       type: String,
       default: '',
-      maxlength: 20
+      maxlength: 500
     },
 
     region: {

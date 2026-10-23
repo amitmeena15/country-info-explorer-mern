@@ -2,10 +2,15 @@ import mongoose from 'mongoose';
 
 const favoriteSchema = new mongoose.Schema(
   {
+    ownerId: {
+      type: String,
+      required: true,
+      index: true
+    },
+
     countryCode: {
       type: String,
       required: true,
-      unique: true,
       uppercase: true,
       trim: true
     },
@@ -34,6 +39,12 @@ const favoriteSchema = new mongoose.Schema(
   {
     timestamps: true
   }
+);
+
+// Each visitor can save a country only once.
+favoriteSchema.index(
+  { ownerId: 1, countryCode: 1 },
+  { unique: true }
 );
 
 const Favorite = mongoose.model('Favorite', favoriteSchema);

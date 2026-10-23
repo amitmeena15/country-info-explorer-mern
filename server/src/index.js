@@ -1,3 +1,6 @@
+import mongoose from 'mongoose';
+import session from 'express-session';
+import MongoStore from 'connect-mongo';
 import 'dotenv/config';
 import dns from 'node:dns';
 import express from 'express';
@@ -25,6 +28,42 @@ app.use(
 
 app.use(express.json({ limit: '1mb' }));
 
+// Check MongoDB availability before session middleware
+app.use('/api/favorites', (req, res, next) => {
+  if (mongoose.connection.readyState !== 1) {
+    return res.status(503).json({
+      success: false,
+      message: 'Favorites service temporarily unavailable'
+    });
+  }
+  next();
+});
+// ===============================
+// Secure Session Configuration
+// ===============================
+if (!process.env.SESSION_SECRET || !process.env.MONGODB_URI) {
+  throw new Error('SESSION_SECRET and MONGODB_URI are required');
+}
+
+app.use(
+  session({
+    name: 'world_explorer.sid',
+    secret: process.env.SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    store: MongoStore.create({
+      mongoUrl: process.env.MONGODB_URI,
+      collectionName: 'sessions'
+    }),
+    cookie: {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000
+    }
+  })
+);
+
 // ===============================
 // Health Check API
 // ===============================
@@ -43,6 +82,8 @@ app.use('/api/countries', countryRoutes);
 // ===============================
 // MongoDB Favorites API
 // ===============================
+
+
 app.use('/api/favorites', favoriteRoutes);
 
 // ===============================
@@ -61,6 +102,23 @@ app.use((req, res) => {
 app.use((err, _req, res, _next) => {
   console.error('Server Error:', err);
 
+  // Invalid JSON
+  if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+    return res.status(400).json({
+      success: false,
+      message: 'Invalid JSON request body'
+    });
+  }
+
+  // Request body exceeds size limit
+  if (err.type === 'entity.too.large') {
+    return res.status(413).json({
+      success: false,
+      message: 'Request body is too large'
+    });
+  }
+
+  // Unexpected server errors
   res.status(500).json({
     success: false,
     message: 'Unexpected server error.'

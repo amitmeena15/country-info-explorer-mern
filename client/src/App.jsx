@@ -488,6 +488,21 @@ useEffect(() => {
             LIVE COUNTRY DATA
           </span>
         </div>
+                {/* FAVORITES LOADING */}
+        {favoritesLoading && (
+          <div className="state-panel" role="status">
+            <p>Loading your favorite countries...</p>
+          </div>
+        )}
+
+        {/* FAVORITES ERROR */}
+        {favoritesError && (
+          <div className="state-panel error-panel" role="alert">
+            <h2>Unable to update favorites</h2>
+            <p>{favoritesError}</p>
+          </div>
+        )}
+
 
         {/* LOADING */}
         {loading && (
@@ -583,6 +598,7 @@ useEffect(() => {
                                 onClick={() =>
                           toggleFavorite(country)
                         }
+                        disabled={favoritesLoading}
                         aria-label={`${
                           isFavorite ? 'Remove' : 'Add'
                         } ${country.name} ${

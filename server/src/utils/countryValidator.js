@@ -33,6 +33,7 @@ async function loadCountries() {
     const code = country?.cca3;
     const name = country?.name?.common;
 
+    // Validate country code and name
     if (
       !/^[A-Z]{3}$/.test(code || '') ||
       typeof name !== 'string' ||
@@ -52,10 +53,22 @@ async function loadCountries() {
     };
 
     // Keep valid country codes while respecting database field limits
-    record.countryName = String(record.countryName).slice(0, 120);
-    record.flag = String(record.flag).slice(0, 500);
-    record.region = String(record.region).slice(0, 100);
-    record.capital = String(record.capital).slice(0, 120);
+    record.countryName = record.countryName.slice(0, 120);
+
+    record.flag =
+      typeof record.flag === 'string'
+        ? record.flag.slice(0, 500)
+        : '';
+
+    record.region =
+      typeof record.region === 'string'
+        ? record.region.slice(0, 100)
+        : 'Other';
+
+    record.capital =
+      typeof record.capital === 'string'
+        ? record.capital.slice(0, 120)
+        : 'No capital listed';
 
     countryMap.set(code, record);
   }

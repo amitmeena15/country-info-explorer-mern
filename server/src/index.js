@@ -31,6 +31,7 @@ app.use(
   })
 );
 
+app.use('/api/favorites', express.json({ limit: '10kb' }));
 app.use(express.json({ limit: '1mb' }));
 
 // Check MongoDB availability before session middleware

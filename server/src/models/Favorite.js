@@ -12,7 +12,7 @@ const favoriteSchema = new mongoose.Schema(
       required: true,
       uppercase: true,
       trim: true,
-      match: /^[A-Z]{2,3}$/
+      match: /^[A-Z]{3}$/
     },
 
     countryName: {

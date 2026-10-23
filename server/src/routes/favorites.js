@@ -1,7 +1,9 @@
 import express from 'express';
 import Favorite from '../models/Favorite.js';
+import { isValidCountryCode } from '../utils/countryValidator.js';
 
 const router = express.Router();
+
 // Initialize a separate session for each visitor
 router.use((req, res, next) => {
   if (!req.session) {
@@ -22,17 +24,18 @@ router.use((req, res, next) => {
 router.get('/', async (req, res) => {
   try {
     const favorites = await Favorite.find({
-  ownerId: req.sessionID
-}).sort({ createdAt: -1 });
+      ownerId: req.sessionID
+    }).sort({ createdAt: -1 });
 
-    res.json({
+    return res.json({
       success: true,
       count: favorites.length,
       favorites
     });
   } catch (error) {
     console.error('Error fetching favorites:', error);
-    res.status(500).json({
+
+    return res.status(500).json({
       success: false,
       message: 'Unable to fetch favorites'
     });
@@ -42,8 +45,15 @@ router.get('/', async (req, res) => {
 // POST: Add a favorite country
 router.post('/', async (req, res) => {
   try {
-    const { countryCode, countryName, flag, region, capital } = req.body;
+    const {
+      countryCode,
+      countryName,
+      flag,
+      region,
+      capital
+    } = req.body || {};
 
+    // Validate required fields
     if (
       typeof countryCode !== 'string' ||
       !countryCode.trim() ||
@@ -55,17 +65,21 @@ router.post('/', async (req, res) => {
         message: 'Country code and name are required'
       });
     }
-        if (countryName.trim().length > 120) {
+
+    // Validate country name length
+    if (countryName.trim().length > 120) {
       return res.status(400).json({
         success: false,
         message: 'Country name must not exceed 120 characters'
       });
     }
-      const optionalFields = [
-  ['flag', flag, 500],
-  ['region', region, 100],
-  ['capital', capital, 120]
-];
+
+    // Validate optional fields
+    const optionalFields = [
+      ['flag', flag, 500],
+      ['region', region, 100],
+      ['capital', capital, 120]
+    ];
 
     for (const [field, value, maxLength] of optionalFields) {
       if (
@@ -79,56 +93,45 @@ router.post('/', async (req, res) => {
       }
     }
 
+    // Normalize country code
     const normalizedCode = countryCode.trim().toUpperCase();
 
-    if (!/^[A-Z]{2,3}$/.test(normalizedCode)) {
-  return res.status(400).json({
-    success: false,
-    message: 'Country code must contain 2 or 3 letters'
-  });
-}
+    // Allow exactly 3 uppercase letters
+    if (!/^[A-Z]{3}$/.test(normalizedCode)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Country code must contain exactly 3 letters'
+      });
+    }
 
-    const existingFavorite = await Favorite.findOne({
-  ownerId: req.sessionID,
-  countryCode: normalizedCode
-});
+    // Verify country code against the real country dataset
+    let validCountryCode;
 
-  if (existingFavorite) {
-  return res.status(200).json({
-    success: true,
-    message: 'Country already exists in favorites',
-    favorite: existingFavorite
-  });
-}
+    try {
+      validCountryCode = await isValidCountryCode(normalizedCode);
+    } catch (validationError) {
+      console.error(
+        'Country validation unavailable:',
+        validationError
+      );
 
-    const favorite = await Favorite.create({
-      ownerId: req.sessionID,
-      countryCode: normalizedCode,
-      countryName: countryName.trim(),
-      flag: typeof flag === 'string' ? flag : '',
-      region: typeof region === 'string' ? region : '',
-      capital: typeof capital === 'string' ? capital : ''
-    });
+      return res.status(503).json({
+        success: false,
+        message: 'Country validation service temporarily unavailable'
+      });
+    }
 
-    res.status(201).json({
-      success: true,
-      message: 'Country added to favorites',
-      favorite
-    });
-  } catch (error) {
-    console.error('Error adding favorite:', error);
-    if (error.name === 'ValidationError' || error.name === 'CastError') {
-  return res.status(400).json({
-    success: false,
-    message: 'Invalid favorite country data'
-  });
-}
+    if (!validCountryCode) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid country code'
+      });
+    }
 
-    if (error.code === 11000) {
-  try {
+    // Check whether this visitor already saved the country
     const existingFavorite = await Favorite.findOne({
       ownerId: req.sessionID,
-      countryCode: req.body.countryCode.trim().toUpperCase()
+      countryCode: normalizedCode
     });
 
     if (existingFavorite) {
@@ -138,12 +141,60 @@ router.post('/', async (req, res) => {
         favorite: existingFavorite
       });
     }
-  } catch (lookupError) {
-    console.error('Error checking duplicate favorite:', lookupError);
-  }
-}
 
-    res.status(500).json({
+    // Save new favorite
+    const favorite = await Favorite.create({
+      ownerId: req.sessionID,
+      countryCode: normalizedCode,
+      countryName: countryName.trim(),
+      flag: typeof flag === 'string' ? flag : '',
+      region: typeof region === 'string' ? region : '',
+      capital: typeof capital === 'string' ? capital : ''
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: 'Country added to favorites',
+      favorite
+    });
+  } catch (error) {
+    console.error('Error adding favorite:', error);
+
+    // Handle invalid MongoDB data
+    if (
+      error.name === 'ValidationError' ||
+      error.name === 'CastError'
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid favorite country data'
+      });
+    }
+
+    // Handle duplicate favorites
+    if (error.code === 11000) {
+      try {
+        const existingFavorite = await Favorite.findOne({
+          ownerId: req.sessionID,
+          countryCode: req.body.countryCode.trim().toUpperCase()
+        });
+
+        if (existingFavorite) {
+          return res.status(200).json({
+            success: true,
+            message: 'Country already exists in favorites',
+            favorite: existingFavorite
+          });
+        }
+      } catch (lookupError) {
+        console.error(
+          'Error checking duplicate favorite:',
+          lookupError
+        );
+      }
+    }
+
+    return res.status(500).json({
       success: false,
       message: 'Unable to add favorite'
     });

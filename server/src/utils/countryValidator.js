@@ -51,18 +51,11 @@ async function loadCountries() {
         : 'No capital listed'
     };
 
-    // Keep canonical records within database field limits
-    if (
-      record.countryName.length > 120 ||
-      typeof record.flag !== 'string' ||
-      record.flag.length > 500 ||
-      typeof record.region !== 'string' ||
-      record.region.length > 100 ||
-      typeof record.capital !== 'string' ||
-      record.capital.length > 120
-    ) {
-      continue;
-    }
+    // Keep valid country codes while respecting database field limits
+    record.countryName = String(record.countryName).slice(0, 120);
+    record.flag = String(record.flag).slice(0, 500);
+    record.region = String(record.region).slice(0, 100);
+    record.capital = String(record.capital).slice(0, 120);
 
     countryMap.set(code, record);
   }
